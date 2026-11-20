@@ -152,7 +152,7 @@ CUDA code must be tested on a CUDA-equipped machine. The initial development hos
 
 Use a main guard in scripts. Put predictor factories and preprocessing functions in an importable module for spawn-based multiprocessing. In notebooks, import that module; use `workers=1` for cell-local CPU callables. Heavy CPU models can also use `Predictor(factory=..., device="cpu")`, loading once per evaluation owner.
 
-`evaluation_timeout=300.0` sets a bounded multiprocessing request wait in seconds; adjust it for legitimately slow simulations. Invalid inputs, model exceptions, worker failure, and unavailable CUDA produce explicit errors. Evaluation failures preserve available completed-result diagnostics rather than silently assigning random penalties.
+`evaluation_timeout=300.0` sets a deadline for worker readiness and each complete multiprocessing request exchange, including data transfer; adjust it for legitimately slow simulations. It cannot interrupt caller-side startup serialization, the OS process-start call, or a serial in-process callback. Use lightweight importable factories for heavy models. Invalid inputs, model exceptions, worker failure, and unavailable CUDA produce explicit errors. Evaluation failures preserve available completed-result diagnostics rather than silently assigning random penalties.
 
 ## Inspect the result
 

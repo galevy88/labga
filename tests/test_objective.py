@@ -93,3 +93,40 @@ def test_predictor_defaults_to_auto_batching():
 def test_predictor_rejects_unsupported_device(device):
     with pytest.raises((TypeError, ValueError), match="device"):
         Predictor(factory=lambda **kwargs: Doubler(), device=device)
+
+
+@pytest.mark.parametrize("bad", [np.array([3 + 14j]), np.array(["3"])])
+@pytest.mark.parametrize("role", ["target", "prediction", "preprocess", "loss"])
+def test_rejects_nonreal_values_before_conversion(bad, role):
+    with pytest.raises(ValueError, match=role):
+        objective = Objective(
+            (lambda row: bad) if role == "prediction" else (lambda row: [3]),
+            bad if role == "target" else [3],
+            preprocess=(lambda row: bad) if role == "preprocess" else None,
+            loss=(lambda p, t: bad[0]) if role == "loss" else "mse",
+        )
+        objective.evaluate(np.ones((1, 1)))
+
+
+@pytest.mark.parametrize(
+    ("loss", "predictions", "target", "expected"),
+    [
+        ("mae", [1e308, 1e308], [0, 0], 1e308),
+        ("mae", [1e308, 0], [-1e308, 0], 1e308),
+        ("mse", [1.5e154, 0], [0, 0], 1.125e308),
+    ],
+)
+@pytest.mark.parametrize("backend", ["numpy", "torch"])
+def test_handles_representable_extreme_losses(loss, predictions, target, expected, backend):
+    raw = np.array([predictions, target], dtype=np.float64)
+    if backend == "torch":
+        raw = pytest.importorskip("torch").from_numpy(raw)
+    result = Objective(Doubler(), target, loss=loss).score(raw, count=2)
+    np.testing.assert_allclose(result.losses, [expected, 0], rtol=2e-15)
+
+
+@pytest.mark.parametrize("loss", ["mae", "mse"])
+def test_rejects_unrepresentable_loss(loss):
+    objective = Objective(Doubler(), [-1e308], loss=loss)
+    with pytest.raises(ValueError, match="finite"):
+        objective.score([[1e308]], count=1)

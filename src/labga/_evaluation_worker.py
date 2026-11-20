@@ -9,7 +9,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from labga._types import FloatArray
-from labga.objective import Objective, Preprocess
+from labga.objective import Objective, Preprocess, _real_array
 from labga.predictors import Predictor
 
 Array = NDArray[Any]
@@ -42,13 +42,8 @@ def prepare(job: Job, preprocess: Preprocess) -> Reply:
     reply = Reply()
     for index, row in zip(job.ids, job.rows, strict=True):
         try:
-            value = np.asarray(preprocess(row.copy()))
-            if (
-                value.ndim != 1
-                or not value.size
-                or value.dtype.kind not in "biuf"
-                or not np.isfinite(value).all()
-            ):
+            value = _real_array(preprocess(row.copy()), "preprocess")
+            if value.ndim != 1 or not value.size or not np.isfinite(value).all():
                 raise ValueError("preprocess must return a nonempty finite numeric vector")
             reply.prepared[index] = value.copy()
             reply.widths[index] = len(value)
@@ -85,12 +80,18 @@ class Evaluator:
     def _score(self, ids: tuple[int, ...], raw: Any, reply: Reply) -> None:
         expected = (len(ids), len(np.asarray(self.objective.target)))
         if not hasattr(raw, "shape"):
-            try:
+            if isinstance(raw, (list, tuple)):
+                # Infer a common array only when this preserves real-valued peer rows.
+                # A ragged, complex, or textual row must be diagnosed independently.
+                try:
+                    array = np.asarray(raw)
+                except (TypeError, ValueError):
+                    pass
+                else:
+                    if array.dtype.kind in "biuf":
+                        raw = array
+            else:
                 raw = np.asarray(raw)
-            except ValueError:
-                if not isinstance(raw, (list, tuple)):
-                    raise
-                # Ragged sequences may still contain valid, identifiable rows.
         shape = getattr(raw, "shape", None)
         row_count = len(raw) if shape is None or len(shape) else None
         if row_count != len(ids):

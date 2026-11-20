@@ -217,7 +217,7 @@ def _check_bounds(bounds: FloatArray, name: str) -> None:
 
 
 def _bounds_pair(values: ArrayLike, name: str) -> FloatArray:
-    pair = _as_real_array(values, name)
+    pair = _as_real_array(values, name, exact=True)
     if pair.shape != (2,):
         raise ValueError(f"{name} must be a (lower, upper) pair")
     _check_bounds(pair, name)
@@ -239,7 +239,7 @@ def _coordinate_bounds(
             resolved[coordinate] = _bounds_pair(values, f"custom_bounds[{coordinate}]")
         return resolved
 
-    resolved = _as_real_array(custom_bounds, "custom_bounds")
+    resolved = _as_real_array(custom_bounds, "custom_bounds", exact=True)
     if resolved.shape != (size, 2):
         raise ValueError(f"custom_bounds must have shape ({size}, 2)")
     _check_bounds(resolved, "custom_bounds")

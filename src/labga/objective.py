@@ -3,6 +3,7 @@
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
+from fractions import Fraction
 from typing import Any, cast
 
 import numpy as np
@@ -23,12 +24,50 @@ class EvaluationBatch:
     losses: FloatArray
 
 
-def as_array(value: object) -> FloatArray:
-    """Convert NumPy-compatible data or a detached torch tensor to float64."""
+def _real_array(value: object, name: str) -> NDArray[Any]:
     torch = sys.modules.get("torch")
     if torch is not None and isinstance(value, torch.Tensor):
-        value = value.detach().cpu().numpy()
-    return np.asarray(value, dtype=np.float64)
+        if value.is_complex():
+            raise ValueError(f"{name} must contain real numeric values")
+        tensor = value.detach().cpu()
+        # NumPy has no bfloat16 or float8 dtype. Both convert exactly to float32.
+        if tensor.dtype == torch.bfloat16 or (
+            tensor.is_floating_point() and tensor.element_size() == 1
+        ):
+            tensor = tensor.float()
+        value = tensor.numpy()
+    array = np.asarray(value)
+    if array.dtype.kind not in "biuf":
+        raise ValueError(f"{name} must contain real numeric values")
+    return array
+
+
+def as_array(value: object, *, name: str = "prediction") -> FloatArray:
+    """Convert real NumPy-compatible data or a detached tensor to float64.
+
+    Args:
+        value: Numeric scalar or array.
+        name: Field name used in validation errors.
+
+    Returns:
+        An array with the input shape and float64 dtype.
+    """
+    with np.errstate(over="ignore"):
+        return _real_array(value, name).astype(np.float64, copy=False)
+
+
+def _overflow_loss(row: FloatArray, target: FloatArray, loss: str) -> float:
+    # Rare fallback when subtraction, squaring, or the sum overflows float64.
+    # Exact binary fractions avoid intermediate overflow even on systems where
+    # longdouble has the same range as float64.
+    total = Fraction()
+    for value, desired in zip(row, target, strict=True):
+        delta = Fraction.from_float(float(value)) - Fraction.from_float(float(desired))
+        total += delta * delta if loss == "mse" else abs(delta)
+    mean = total / len(target)
+    if mean > sys.float_info.max:
+        raise ValueError("loss must contain only finite scalars")
+    return float(mean)
 
 
 @dataclass(frozen=True)
@@ -48,7 +87,7 @@ class Objective:
     preprocess: Preprocess | None = None
 
     def __post_init__(self) -> None:
-        target = np.array(self.target, dtype=np.float64, copy=True)
+        target = as_array(self.target, name="target").copy()
         if target.ndim != 1 or not target.size or not np.isfinite(target).all():
             raise ValueError("target must be a finite, nonempty 1D vector")
         target.setflags(write=False)
@@ -70,6 +109,7 @@ class Objective:
         self, candidates: NDArray[Any], *, predictor: object | None = None
     ) -> EvaluationBatch:
         """Evaluate candidate rows, using an already-built model when provided."""
+        candidates = _real_array(candidates, "candidates")
         if candidates.ndim != 2 or not len(candidates) or not np.isfinite(candidates).all():
             raise ValueError("candidates must be a finite nonempty 2D array")
         model = self.predictor if predictor is None else predictor
@@ -77,8 +117,10 @@ class Objective:
             raise TypeError("Use optimize/EvaluationSession to manage a Predictor factory")
         inputs = candidates.copy()
         if self.preprocess is not None:
-            inputs = np.asarray([self.preprocess(row.copy()) for row in inputs])
-            if inputs.ndim != 2 or not np.isfinite(inputs).all():
+            inputs = np.asarray(
+                [_real_array(self.preprocess(row.copy()), "preprocess") for row in inputs]
+            )
+            if inputs.ndim != 2 or not inputs.shape[1] or not np.isfinite(inputs).all():
                 raise ValueError("preprocess must return a fixed-length finite numeric vector")
         batch_method = getattr(model, "predict_batch", None)
         if callable(batch_method):
@@ -93,40 +135,31 @@ class Objective:
         """Validate output shape and reduce each prediction row independently."""
         target = np.asarray(self.target)
         expected = (count, len(target))
-        torch = sys.modules.get("torch")
-        tensor_losses = None
-        if torch is not None and isinstance(predictions, torch.Tensor):
-            if tuple(predictions.shape) != expected:
-                raise ValueError(
-                    f"prediction shape must be {expected}; got {tuple(predictions.shape)}"
-                )
-            if isinstance(self.loss, str):
-                with torch.inference_mode():
-                    values = predictions.to(dtype=torch.float64)
-                    desired = torch.tensor(target.copy(), dtype=values.dtype, device=values.device)
-                    residual = values - desired
-                    tensor_losses = (
-                        residual.square().mean(dim=1)
-                        if self.loss == "mse"
-                        else residual.abs().mean(dim=1)
-                    )
         values_np = as_array(predictions)
         if values_np.shape != expected:
             raise ValueError(f"prediction shape must be {expected}; got {values_np.shape}")
         if not np.isfinite(values_np).all():
             raise ValueError("prediction must contain only finite values")
-        if tensor_losses is not None:
-            losses = as_array(tensor_losses)
-        elif isinstance(self.loss, str):
-            residual_np = values_np - target
-            with np.errstate(over="ignore", invalid="ignore"):
-                losses = np.mean(
-                    residual_np**2 if self.loss == "mse" else np.abs(residual_np), axis=1
-                )
+        if isinstance(self.loss, str):
+            torch = sys.modules.get("torch")
+            if torch is not None and isinstance(predictions, torch.Tensor):
+                with torch.inference_mode():
+                    values = predictions.to(dtype=torch.float64)
+                    desired = torch.tensor(target, dtype=values.dtype, device=values.device)
+                    residual = values - desired
+                    terms = residual.square() if self.loss == "mse" else residual.abs()
+                    losses = as_array(terms.mean(dim=1), name="loss")
+            else:
+                with np.errstate(over="ignore", invalid="ignore"):
+                    residual_np = values_np - target
+                    terms_np = residual_np**2 if self.loss == "mse" else np.abs(residual_np)
+                    losses = np.mean(terms_np, axis=1)
+            for index in np.flatnonzero(~np.isfinite(losses)):
+                losses[index] = _overflow_loss(values_np[index], target, self.loss)
         else:
             computed = []
             for row in values_np:
-                value = np.asarray(self.loss(row.copy(), target.copy()))
+                value = _real_array(self.loss(row.copy(), target.copy()), "loss")
                 if value.ndim != 0:
                     raise ValueError("custom loss must return one scalar per candidate")
                 computed.append(float(value))

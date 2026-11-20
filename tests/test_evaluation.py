@@ -254,3 +254,87 @@ def test_coordinator_interrupt_cleans_up(monkeypatch):
         with pytest.raises(KeyboardInterrupt):
             runner.evaluate(np.zeros((2, 1)))
         assert children() == before
+
+
+def slow_wire_peer(wire, spec):
+    import struct
+
+    from labga._evaluation_worker import Reply
+
+    wire.send(spec.preprocess is not None)
+    if spec.cap == 1:
+        time.sleep(1.4)
+        wire.recv()
+        wire.send(Reply())
+    else:
+        wire.recv()
+        # A frame header makes poll() ready before the complete reply exists.
+        os.write(wire.fileno(), struct.pack("!i", 100) + b"x")
+        time.sleep(1.4)
+    wire.close()
+
+
+@pytest.mark.parametrize("stall", ["send", "partial_reply"])
+def test_request_deadline_covers_complete_transport(monkeypatch, stall):
+    from labga import _worker_pool
+    from labga._evaluation_worker import Job, WorkerSpec
+
+    if stall == "partial_reply" and os.name != "posix":
+        pytest.skip("test writes a POSIX pipe frame")
+    before = children()
+    monkeypatch.setattr(_worker_pool, "_serve", slow_wire_peer)
+    pool = _worker_pool.SpawnPool(WorkerSpec(cap=1 if stall == "send" else 2), timeout=10)
+    try:
+        pool.ensure(1)
+        pool.timeout = 0.1
+        rows = np.zeros((1, 1_000_000 if stall == "send" else 1))
+        start = time.monotonic()
+        (reply,) = pool.run([Job((7,), rows)])
+        assert "timed out" in reply.errors.get(7, "")
+        assert time.monotonic() - start < 1
+    finally:
+        pool.close(abort=True)
+    assert children() == before
+
+
+def test_stalled_sender_preserves_other_worker_and_releases_threads(monkeypatch):
+    import threading
+
+    from labga import _worker_pool
+    from labga._evaluation_worker import Job, WorkerSpec
+
+    before_children = children()
+
+    def transport_threads():
+        return {t for t in threading.enumerate() if t.name.startswith("labga-ipc-")}
+
+    before_threads = transport_threads()
+    pool = _worker_pool.SpawnPool(WorkerSpec(preprocess=identity, cap=1), timeout=10)
+    try:
+        pool.ensure(1)
+        monkeypatch.setattr(_worker_pool, "_serve", slow_wire_peer)
+        pool.ensure(2)
+        pool.timeout = 0.15
+        stalled = Job((0,), np.zeros((1, 1_000_000)))
+        quick = Job((1,), np.ones((1, 1)))
+        replies = list(pool.run([quick, stalled]))
+        assert any(1 in reply.prepared for reply in replies)
+        assert any("timed out" in reply.errors.get(0, "") for reply in replies)
+    finally:
+        pool.close(abort=True)
+    assert children() == before_children
+    assert transport_threads() == before_threads
+
+
+def test_invalid_prediction_dtype_preserves_real_peer():
+    class MixedRows:
+        def __call__(self, row):
+            return row
+
+        def predict_batch(self, rows):
+            return [[1.0], [1 + 2j], ["1"]]
+
+    with session(MixedRows(), 1) as runner, pytest.raises(EvaluationError) as caught:
+        runner.evaluate(np.zeros((3, 1)))
+    assert caught.value.failed_indices == (1, 2)
+    assert set(caught.value.completed) == {0}

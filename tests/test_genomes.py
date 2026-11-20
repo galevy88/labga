@@ -258,3 +258,15 @@ def test_numeric_mutation_preserves_additive_step_when_range_width_overflows() -
     mutated = genome.mutate(np.array([[1.0]]), np.random.default_rng(1), 1, 1e-308)
 
     assert mutated[0, 0] == pytest.approx(3.9540345921007063)
+
+
+@pytest.mark.parametrize("placement", ["shared", "mapping", "array"])
+def test_bounds_require_exact_float64_conversion(placement):
+    pair = [2**53 + 1, 2**53 + 6]
+    with pytest.raises(ValueError, match="bounds.*exactly representable"):
+        if placement == "shared":
+            NumericGenome(1, bounds=pair)
+        elif placement == "mapping":
+            NumericGenome(1, custom_bounds={0: pair})
+        else:
+            NumericGenome(1, custom_bounds=[pair])

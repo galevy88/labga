@@ -35,3 +35,13 @@ jobs:
         with:
           name: distributions
           path: dist/*
+  minimum-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.11'
+      - run: uv venv
+      - run: uv pip install . "numpy==1.26.4" "threadpoolctl==3.2.0" pytest
+      - run: .venv/bin/python -m pytest

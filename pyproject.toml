@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{name = "Gal Levy"}]
-dependencies = ["numpy>=1.26", "threadpoolctl>=3.2"]
+dependencies = ["numpy>=1.26.4", "threadpoolctl>=3.2"]
 
 [project.urls]
 Repository = "https://github.com/galevy88/labga"

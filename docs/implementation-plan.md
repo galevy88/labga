@@ -13,8 +13,8 @@
 ## Global constraints
 
 - New standalone repository, never modify presentation code or research analyses.
-- Repository/package name and public/MIT status await the explicit naming answer; no PyPI upload in this task.
-- Proposed namespace `labga`; update consistently if the user selects another name.
+- User confirmed repository/package name labga and public visibility with MIT license; no PyPI upload in this task.
+- Confirmed namespace `labga`.
 - All technical documentation/code in English; user communication in Hebrew.
 - `optimize` takes `objective=Objective(...)`, not separate target/predictor/loss.
 - Target is a fixed finite nonempty 1D vector; each candidate gets one finite scalar loss.
@@ -104,4 +104,18 @@ Use `FloatArray = numpy.typing.NDArray[numpy.float64]` for internal population/p
 
 Ruling: include threadpoolctl as a small core dependency to enforce per-worker native thread limits; explicit control is safer than setting environment variables after NumPy import.
 
-Progress will be recorded here with verification evidence as tasks complete. Implementation has not started at plan creation.
+Progress will be recorded here with verification evidence as tasks complete. Initial implementation completed; final review fixes and release verification are tracked below.
+
+
+### Verification progress — 2026-11-20
+
+- Repository created: https://github.com/galevy88/labga (public, user-approved MIT).
+- Initial implementation commit: f30c668; a separate hardening commit includes the review fixes.
+- Initial full local verification: 172 tests passed, 2 platform-dependent skips; coverage 91.45%. Strict mypy and Ruff passed.
+- All four runnable examples passed: binary exact match, numeric time-series fitting, four islands/two CPU workers, and PyTorch inference on CPU.
+- Wheel and source distribution built successfully. Fresh CPU-only environment imports the wheel without PyTorch.
+- Independent review accepted six fixes: real-valued objective validation, complete IPC timeout supervision, CUDA model ownership guard, bfloat16 conversion, exact bounds conversion, and overflow-safe builtin loss reduction. All six findings were fixed with regressions and approved in a scoped independent re-review.
+- Real CUDA hardware is unavailable on the development host; hardware smoke test is explicitly skipped.
+- Final local verification: 201 passed, 2 skipped, 92.31% coverage; minimum-dependency installed-wheel suite: 184 passed, 10 optional/platform skips. Delivery includes a public repository and a durable local checkout. GitHub CI results are tracked in workflow runs.
+
+Ruling: document caller-side startup serialization/OS process creation as outside interruptible evaluation timeouts. Spawned request transfers and replies are supervised; serial callbacks remain synchronous. Cost: users with expensive custom serialization should use the documented lightweight factory interface.

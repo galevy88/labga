@@ -13,7 +13,7 @@ from labga._resources import available_cpus
 from labga._types import FloatArray, Genome
 from labga._worker_pool import SpawnPool
 from labga.objective import EvaluationBatch, Objective
-from labga.predictors import Predictor
+from labga.predictors import Predictor, TorchPredictor
 
 
 class EvaluationError(RuntimeError):
@@ -60,8 +60,9 @@ def _jobs(ids: tuple[int, ...], rows: Array, size: int) -> Iterator[Job]:
 class EvaluationSession:
     """Manage persistent workers, preserve input order, and retain partial evidence.
 
-    Explicit serial CPU evaluation runs in the caller. Spawned initialization and
-    each outstanding request have independent timeouts in seconds.
+    Explicit serial CPU evaluation runs in the caller. Worker readiness and each
+    complete request exchange have independent deadlines in seconds. Caller-side
+    startup serialization and the OS process-start call cannot be interrupted.
     """
 
     def __init__(
@@ -90,6 +91,10 @@ class EvaluationSession:
         self._objective = objective
         self._genome = genome
         config = objective.predictor
+        if isinstance(config, TorchPredictor) and config.device.startswith("cuda"):
+            raise ValueError(
+                "Construct the CUDA model in its owner with Predictor(factory=..., device='cuda')"
+            )
         device = config.device if isinstance(config, Predictor) else "cpu"
         size = config.batch_size if isinstance(config, Predictor) else "auto"
         self._cap = 64 if size == "auto" else size
