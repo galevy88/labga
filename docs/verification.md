@@ -26,7 +26,7 @@ No real DKO adapter, checkpoint, biological dataset, or experiment was used. Exa
 
 GitHub Actions runs CPU tests on Linux/macOS/Windows with Python 3.11–3.13, quality checks with PyTorch, and a minimum-dependency job. Consult the actual workflow runs for remote results; this document records local verification only.
 
-The package has not been uploaded to PyPI or TestPyPI.
+At the initial implementation checkpoint above, the package had not been uploaded to PyPI or TestPyPI. The production release is recorded below.
 
 ## PyPI release preparation — 2026-11-20
 
@@ -39,3 +39,24 @@ The package has not been uploaded to PyPI or TestPyPI.
 - Created GitHub environments `pypi` and `testpypi` and verified that both allow deployment only from branch `main`.
 
 At this checkpoint, the PyPI account's pending publisher is still awaiting user configuration. No index upload has been attempted. The publishing guide records the exact fields and release procedure. These checks verify package preparation, not a public release.
+
+## Production PyPI release — 2026-11-20
+
+Version **0.1.0** is publicly available at https://pypi.org/project/labga/.
+
+- Release tag: `v0.1.0`, commit `09c5e9eb8eecd1a0ad5e20d41212a9f7bd68e062`.
+- [CI](https://github.com/galevy88/labga/actions/runs/44821167418): all 11 jobs passed for the release commit.
+- [Release validation](https://github.com/galevy88/labga/actions/runs/44821167246): passed for the same commit.
+- [Production publication](https://github.com/galevy88/labga/actions/runs/44821431487): both build and publishing jobs passed using OIDC Trusted Publishing; the user explicitly approved the connection and release.
+- PyPI returned the expected name, version, author, MIT license expression, Python requirement, and optional PyTorch dependency. Both wheel and source archive were present.
+- A fresh Python 3.12 environment installed `labga==0.1.0` directly from `https://pypi.org/simple`, with caching disabled and without a source checkout or PyTorch.
+- Standard binary GA found the exact target (MSE `0.0`). Numeric island GA with four populations, two CPU workers, and ring migration improved MSE from `0.007447256872634946` to `2.9482366782815454e-07` in the deterministic smoke example.
+
+Published file SHA-256 values:
+
+| File | SHA-256 |
+| --- | --- |
+| `labga-0.1.0-py3-none-any.whl` | `9de2854e0520de395c42ade7ada97b3b6a052275941ea44e17e8aed884f3aba9` |
+| `labga-0.1.0.tar.gz` | `3cca40f7abb1901ff9baab240563d91065852cdca1beedd66830ef786c497876` |
+
+No TestPyPI upload was made. CUDA hardware and real DKO validation limitations above still apply. GitHub reported a non-blocking Node.js 20 action deprecation warning; the runner executed those actions on Node.js 24 successfully.

@@ -2,6 +2,32 @@
 
 This guide prepares the first `0.1.0` release and subsequent releases. A successful validation run does **not** publish a package. Publication requires an explicit manual workflow dispatch and a configured PyPI trusted publisher.
 
+Version `0.1.0` was published and independently installed on 2026-11-20; see [verification](verification.md). The production trusted publisher is already configured, so ordinary future releases do not repeat the account setup.
+
+## Updating an existing release
+
+For the next bug fix, use a new version such as `0.1.1`:
+
+1. Make and test the code changes. Update `pyproject.toml`, `src/labga/__init__.py`, and `CHANGELOG.md`; run `uv lock`.
+2. Push the reviewed changes to `main` and wait for CI and package validation to pass.
+3. On that exact checked commit, create and push its version tag:
+
+   ```bash
+   git tag -a v0.1.1 -m "Release labga 0.1.1"
+   git push origin v0.1.1
+   ```
+
+4. Run **Package release** from `main`, with target `pypi` and release tag `v0.1.1`. Confirm the workflow succeeds and verify a clean installation of the new version.
+5. Colleagues update their environments explicitly:
+
+   ```bash
+   pip install --upgrade labga
+   # Or pin an exact version for reproducible experiments:
+   pip install "labga==0.1.1"
+   ```
+
+Existing installations do not update automatically. A published version cannot be overwritten; use a new version for changed package contents. Users can pin a prior compatible version if they need to reproduce an earlier result.
+
 ## One-time account setup
 
 1. Sign in at [PyPI](https://pypi.org/), verify your email, and enable [two-factor authentication](https://docs.pypi.org/your-account/two-factor-authentication/). Keep recovery codes privately.

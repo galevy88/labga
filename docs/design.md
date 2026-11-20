@@ -1,17 +1,18 @@
 # Genetic algorithms library — approved design
 
 - Date: 2026-11-20
-- Status: Design approved and implementation authorized. Remaining refinements are listed in Section 11.
+- Status: Initial implementation complete; version 0.1.0 published to PyPI and installation verified on 2026-11-20. Remaining scope boundaries are listed in Section 11.
 - Owner: `galevy88`
 - Repository and package name: `labga` (confirmed by the user); public, MIT licensed.
 - Repository: https://github.com/galevy88/labga
+- Package: https://pypi.org/project/labga/
 - Python support target: 3.11+; initial local verification on 3.12, CI matrix covers 3.11–3.13.
 
 This document records the approved design and the initial implementation contract. The implementation belongs in a separate GitHub repository. The examples describe the approved interface implemented in the initial library.
 
 ## 1. Goal and agreed requirements
 
-Provide a small Python library that lab colleagues can eventually install from PyPI, import, and use to optimize an input vector against a desired prediction. A user supplies the search space and an `Objective` that bundles a fixed predictor, a target, a loss, and optional preprocessing. The library manages evolution and evaluation.
+Provide a small Python library that lab colleagues can install from PyPI, import, and use to optimize an input vector against a desired prediction. A user supplies the search space and an `Objective` that bundles a fixed predictor, a target, a loss, and optional preprocessing. The library manages evolution and evaluation.
 
 Agreed scope:
 
@@ -25,7 +26,7 @@ Agreed scope:
 - A shared GPU predictor, with CPU work separated from inference.
 - Straightforward examples, results, and documentation suitable for colleagues.
 
-Operator defaults, numeric initialization details, and migration settings remain proposed refinements.
+Initial operator defaults, numeric initialization details, and migration settings are implemented as described below.
 
 ## 2. Optimization contract
 
@@ -316,7 +317,7 @@ Dependency boundary: NumPy and threadpoolctl in core; PyTorch optional for the G
 
 README should start with installation and a short complete optimization example, followed by binary/numeric genomes, islands, and GPU execution. Clearly distinguish population parallelism from evaluation parallelism. Include model factory and notebook examples, expected input/output shapes, and troubleshooting.
 
-The authorized implementation starts with the core and CPU examples, followed by islands, shared GPU evaluation, compatibility and performance checks, and a TestPyPI installation check. Publication to PyPI requires separate authorization.
+The initial implementation includes the core and CPU examples, islands, shared GPU evaluation, and compatibility checks. Publication of version 0.1.0 was explicitly authorized and completed on 2026-11-20 using Trusted Publishing. A clean installation from production PyPI passed standard-GA and island/multiprocessing smoke checks; TestPyPI remains an optional rehearsal for later versions. Actual CUDA and workload-specific performance checks remain separate scope boundaries.
 
 ## 10. Verification and scope boundaries
 
@@ -345,6 +346,6 @@ Reuse the problem-solving approach and preserve credit/provenance where code is 
 
 Decisions to settle before the relevant milestone:
 
-1. **Confirmed:** `galevy88/labga`, public repository, MIT license, Python 3.11+. PyPI name availability was checked on 2026-11-20, but no PyPI publication or reservation has taken place.
+1. **Confirmed:** `galevy88/labga`, public repository, MIT license, Python 3.11+. Version 0.1.0 was published to PyPI on 2026-11-20 and independently installed from the public index. See `docs/verification.md` for release evidence.
 2. **Before real DKO integration:** inspect its actual wrapper, supported perturbations, batch semantics, model construction, framework, and device support. This does not block implementing generic CPU examples.
 3. **Implemented initial defaults:** tournament selection, uniform crossover, clipped numeric normal initialization/mutation and configurable ring migration. The synchronized island model runs on one computer. Wider deployment and performance claims require workload-specific measurement.
