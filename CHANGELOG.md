@@ -1,8 +1,6 @@
 # Changelog
 
-## 0.1.0 — first release candidate
-
-Prepared for publication; this heading does not confirm a PyPI upload.
+## 0.1.0
 
 - A single `optimize` API for a standard genetic algorithm and island populations with ring migration.
 - Binary and bounded numeric genomes, configurable initialization, per-coordinate bounds, and initial populations.

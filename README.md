@@ -8,15 +8,13 @@ This is an initial research-library release. The included examples are synthetic
 
 ## Install
 
-The first PyPI release is being prepared. Once published, installation will be:
-
 ```bash
 pip install labga
 # Optional PyTorch support:
 pip install "labga[torch]"
 ```
 
-Until that release is available, install directly from this repository:
+To install the development version directly from GitHub:
 
 ```bash
 pip install "git+https://github.com/galevy88/labga.git"
