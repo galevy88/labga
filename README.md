@@ -8,7 +8,15 @@ This is an initial research-library release. The included examples are synthetic
 
 ## Install
 
-The package has not been published to PyPI yet. Install directly from this repository:
+The first PyPI release is being prepared. Once published, installation will be:
+
+```bash
+pip install labga
+# Optional PyTorch support:
+pip install "labga[torch]"
+```
+
+Until that release is available, install directly from this repository:
 
 ```bash
 pip install "git+https://github.com/galevy88/labga.git"
@@ -185,9 +193,10 @@ uv run --no-sync pytest
 uv run --no-sync ruff check .
 uv run --no-sync ruff format --check .
 uv run --no-sync mypy
-uv build
+uv build --no-sources
+uv run --no-sync twine check --strict dist/*
 ```
 
-See the [design](docs/design.md) and [implementation plan](docs/implementation-plan.md). The original [Git_HH project](https://github.com/galevy88/Git_HH) inspired this library's workflow; this is a separate implementation with a general prediction interface.
+See the [design](https://github.com/galevy88/labga/blob/main/docs/design.md), [implementation plan](https://github.com/galevy88/labga/blob/main/docs/implementation-plan.md), and [publishing guide](https://github.com/galevy88/labga/blob/main/docs/publishing.md). The original [Git_HH project](https://github.com/galevy88/Git_HH) inspired this library's workflow; this is a separate implementation with a general prediction interface.
 
 MIT license. Model weights, experimental data, and third-party predictors retain their own licenses and validation requirements.

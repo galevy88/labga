@@ -27,3 +27,15 @@ No real DKO adapter, checkpoint, biological dataset, or experiment was used. Exa
 GitHub Actions runs CPU tests on Linux/macOS/Windows with Python 3.11–3.13, quality checks with PyTorch, and a minimum-dependency job. Consult the actual workflow runs for remote results; this document records local verification only.
 
 The package has not been uploaded to PyPI or TestPyPI.
+
+## PyPI release preparation — 2026-11-20
+
+- Added an explicit manual publishing workflow with validation-only defaults, release-tag checks, isolated artifact upload, and OIDC authentication.
+- Added 14 release tests using real temporary Git repositories. Full local suite: **215 passed, 2 skipped**.
+- Ruff lint/format checks and strict mypy passed, including the release guard script.
+- `uv build --no-sources` built the wheel and source distribution; `twine check --strict` passed for both.
+- Installed the built wheel into a fresh Python 3.12 environment outside the checkout. Verified version `0.1.0`, successful optimization, absence of optional PyTorch, and inclusion of the typing marker and MIT license.
+- Independently reviewed the tag provenance and upload-permission boundaries; no blocking findings remained.
+- Created GitHub environments `pypi` and `testpypi` and verified that both allow deployment only from branch `main`.
+
+At this checkpoint, the PyPI account's pending publisher is still awaiting user configuration. No index upload has been attempted. The publishing guide records the exact fields and release procedure. These checks verify package preparation, not a public release.

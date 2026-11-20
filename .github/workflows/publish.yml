@@ -1,0 +1,140 @@
+name: Package release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Validate only, rehearse on TestPyPI, or publish to PyPI
+        type: choice
+        required: true
+        default: validate
+        options:
+          - validate
+          - testpypi
+          - pypi
+      release_tag:
+        description: Existing version tag (e.g. v0.1.0); required for either publishing target
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Validate and build distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select a release commit from main
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || '' }}
+        run: |
+          if [[ -n "$RELEASE_TAG" ]]; then
+            git check-ref-format "refs/tags/$RELEASE_TAG"
+            release_commit="$(git rev-parse --verify "refs/tags/$RELEASE_TAG^{commit}")"
+            git merge-base --is-ancestor "$release_commit" refs/remotes/origin/main
+            git checkout --detach "$release_commit"
+          fi
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: '3.12'
+          enable-cache: true
+      - name: Install core and development dependencies
+        run: uv sync --locked
+      - name: Validate release identity
+        env:
+          RELEASE_TARGET: ${{ inputs.target || 'validate' }}
+          RELEASE_TAG: ${{ inputs.release_tag || '' }}
+          WORKFLOW_EVENT: ${{ github.event_name }}
+          WORKFLOW_REF: ${{ github.ref }}
+        run: >-
+          uv run --no-sync python scripts/check_release.py
+          --target "$RELEASE_TARGET"
+          --release-tag "$RELEASE_TAG"
+          --event-name "$WORKFLOW_EVENT"
+          --workflow-ref "$WORKFLOW_REF"
+      - name: Test the core package
+        run: uv run --no-sync pytest -m 'not torch and not cuda'
+      - name: Build fresh distributions and check metadata
+        run: |
+          rm -rf dist
+          uv build --no-sources
+          uv run --no-sync twine check --strict dist/*
+      - name: Install and exercise the wheel outside the checkout
+        run: |
+          uv venv "$RUNNER_TEMP/labga-wheel-smoke"
+          smoke_python="$RUNNER_TEMP/labga-wheel-smoke/bin/python"
+          uv pip install --python "$smoke_python" dist/*.whl
+          cd "$RUNNER_TEMP"
+          "$smoke_python" -I - <<'PY'
+          import importlib.metadata
+          import importlib.util
+          import os
+          import tomllib
+          from pathlib import Path
+
+          import labga
+
+          checkout = Path(os.environ["GITHUB_WORKSPACE"]).resolve()
+          with (checkout / "pyproject.toml").open("rb") as metadata_file:
+              expected_version = tomllib.load(metadata_file)["project"]["version"]
+          assert importlib.metadata.version("labga") == labga.__version__ == expected_version
+          assert not Path(labga.__file__).resolve().is_relative_to(checkout)
+          assert importlib.util.find_spec("torch") is None
+          objective = labga.Objective(lambda candidate: candidate, [1, 1])
+          result = labga.optimize(
+              genome=labga.BinaryGenome(2),
+              objective=objective,
+              initial_population=[[1, 1], [0, 0]],
+              population_size=2,
+              generations=1,
+              workers=1,
+              seed=0,
+          )
+          assert result.best_loss == 0
+          assert result.best_solution.tolist() == [1, 1]
+          print(f"Installed wheel passed: labga {labga.__version__}")
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-distributions
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Publish verified distributions
+    needs: build
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      (inputs.target == 'testpypi' || inputs.target == 'pypi')
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ inputs.target }}
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-distributions
+          path: dist
+      - name: Publish to TestPyPI with Trusted Publishing
+        if: inputs.target == 'testpypi'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+      - name: Publish to PyPI with Trusted Publishing
+        if: inputs.target == 'pypi'
+        uses: pypa/gh-action-pypi-publish@release/v1
