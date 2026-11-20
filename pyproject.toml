@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "labga"
+version = "0.1.0"
+description = "Accessible genetic algorithms with island populations and shared batched inference."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{name = "Gal Levy"}]
+dependencies = ["numpy>=1.26", "threadpoolctl>=3.2"]
+
+[project.urls]
+Repository = "https://github.com/galevy88/labga"
+
+[project.optional-dependencies]
+torch = ["torch>=2.5"]
+
+[dependency-groups]
+dev = ["pytest>=8", "pytest-cov>=5", "ruff>=0.8", "mypy>=1.13"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/labga"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+files = ["src/labga"]
+
+[[tool.mypy.overrides]]
+module = ["threadpoolctl"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = ["cuda: requires an actual CUDA device", "torch: requires the optional PyTorch dependency"]
+
+[tool.coverage.run]
+source = ["labga"]
+parallel = true
+
+[tool.coverage.report]
+show_missing = true
